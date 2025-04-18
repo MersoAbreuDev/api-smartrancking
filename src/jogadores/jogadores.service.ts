@@ -1,16 +1,17 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CriarJogadorDto } from './dtos/criar-jogador.dto';
 import { Jogador } from './interfaces/jogador.interface';
-import * as uuid from 'uuid';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 
 
 @Injectable()
 export class JogadoresService {
 
     private jogadores: Jogador[] = [];
-
     constructor(
-        private readonly logger: Logger
+        private readonly logger: Logger,
+        @InjectModel('Jogador') private readonly jogadorModel: Model<Jogador>,
     ) {
         this.logger = new Logger(JogadoresService.name);
     }
@@ -19,56 +20,54 @@ export class JogadoresService {
         await this.criar(jogadorDTO);
     }
 
-    private criar(jogadorDTO: CriarJogadorDto): void {
-       const {nome, telefoneCelular, email } = jogadorDTO;
-        const jogadorEncontrado =  this.jogadores.find((jogador) => jogador.email === email);
-        if (jogadorEncontrado) {
-            return this.atualizar(jogadorEncontrado, jogadorDTO);
+    async criar(jogadorDTO: CriarJogadorDto): Promise<Jogador> {
+        const jogadorCriado = new this.jogadorModel(jogadorDTO);
+        return await jogadorCriado.save();
+    }
+
+    async getAllJogadores() {
+        const jogadores = await this.jogadorModel.find().exec();
+        if (!jogadores || jogadores.length === 0) {
+            throw new NotFoundException('Não há jogadores registrados');
         }
-
-       const jogador: Jogador = {
-            _id:uuid.v4(),
-            nome,
-            telefoneCelular,
-            email,
-            ranking:'A',
-            posicaoRanking:3,
-            urlFotoJogador:'https://www.smartrancking.com.br/assets/img/sem-foto.png'
-        };
-        this.jogadores.push(jogador);
-        
+        return jogadores.map(jogador => ({ 
+            id: jogador._id,
+            nome: jogador.nome,
+            telefoneCelular: jogador.telefoneCelular,
+            email: jogador.email,
+            ranking: jogador.ranking,
+            posicaoRanking: jogador.posicaoRanking,
+            urlFotoJogador: jogador.urlFotoJogador,
+        }));
     }
 
-    public getAllJogadores(){
-        const jogadores = this.jogadores.map((jogador) => {
-            return {
-                _id: jogador._id,
-                nome: jogador.nome,
-                telefoneCelular: jogador.telefoneCelular,
-                email: jogador.email,
-                ranking: jogador.ranking,
-                posicaoRanking: jogador.posicaoRanking,
-                urlFotoJogador: jogador.urlFotoJogador
-            };
-        });  
-        return jogadores;
+    async getJogadorById(id: string): Promise<Jogador> {
+        console.log('ID recebido:', id); // Log do ID recebido
+      const jogadorEncontrado = await this.jogadorModel.findById(id).exec();
+        console.log('Jogador encontrado:', jogadorEncontrado); 
+         if (!jogadorEncontrado) {
+              throw new NotFoundException(`Jogador com email ${id} não encontrado`);
+         }
+        return jogadorEncontrado;
     }
 
-    public getJogadorByEmail(email: string): Jogador | undefined {
-        return this.jogadores.find((jogador) => jogador.email === email);
+    async getJogadorByEmail(email: string): Promise<Jogador> {
+        const jogadorEncontrado = await this.jogadorModel.findOne({ email }).exec();
+           if (!jogadorEncontrado) {
+                throw new NotFoundException(`Jogador com email ${email} não encontrado`);
+           }
+          return jogadorEncontrado;
+      }
+
+    async atualizar(id:string, jogadorDTO: CriarJogadorDto):Promise<Jogador> {
+       const updatedJogador = await this.jogadorModel.findByIdAndUpdate(id, jogadorDTO, { new: true });
+       if (!updatedJogador) {
+           throw new NotFoundException(`Jogador with email ${id} not found`);
+       }
+       return updatedJogador;
     }
 
-    public atualizar(jogadorEncontrado: Jogador, jogadorDTO: CriarJogadorDto):void {
-        const { nome, telefoneCelular, email } = jogadorDTO;
-        jogadorEncontrado.nome = nome;
-        jogadorEncontrado.telefoneCelular = telefoneCelular;
-        jogadorEncontrado.email = email;
-    }
-
-    public deletar(jogador: Jogador): void {
-        const index = this.jogadores.indexOf(jogador);
-        if (index > -1) {
-            this.jogadores.splice(index, 1);
-        }
+    public deletar(id:string): void {
+        this.jogadorModel.findByIdAndDelete(id).exec()
     }
 }
