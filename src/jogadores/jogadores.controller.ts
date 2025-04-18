@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, NotFoundException, InternalServerErrorException, Delete } from '@nestjs/common';
+import { Body, Controller, Get, Post, NotFoundException, InternalServerErrorException, Delete, Query, Put, Param } from '@nestjs/common';
 import { CriarJogadorDto } from './dtos/criar-jogador.dto';
 import { JogadoresService } from './jogadores.service';
 import { Jogador } from './interfaces/jogador.interface';
@@ -33,7 +33,7 @@ export class JogadoresController {
                 throw new NotFoundException('Não há jogadores registrados');
             }
             return jogadores.map((jogador) => ({
-                _id: jogador._id,
+                id: jogador.id,
                 nome: jogador.nome,
                 telefoneCelular: jogador.telefoneCelular,
                 email: jogador.email,
@@ -57,7 +57,6 @@ export class JogadoresController {
                 throw new NotFoundException('Jogador não encontrado');
             }
             return {
-                _id: jogador._id,
                 nome: jogador.nome,
                 telefoneCelular: jogador.telefoneCelular,
             };
@@ -69,27 +68,48 @@ export class JogadoresController {
         }
     }
 
-    @Delete()
-    async deleteJogador(@Body() jogadorRequest: Jogador) {
+    @Delete('deletar/:id')
+    async deleteJogador(@Param('id') id: string) {
         try {
-            const jogador =  this.jogadorService.getJogadorByEmail(jogadorRequest.email);
+            const jogadorId =  this.jogadorService.getJogadorById(id);
+            if (!jogadorId) {
+                throw new NotFoundException('Jogador não encontrado');
+            }
+            await this.jogadorService.deletar((await jogadorId).id);
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error; 
+            }
+            throw new InternalServerErrorException('Erro ao deletar jogador');
+        }
+    }
+
+    @Put('atualizar/:id')
+    async atualizarJogador(
+        @Param('id') id: string, 
+        @Body() jogadorRequest: Jogador
+    ) {
+        try {
+            console.log("Corpo da requisição:", jogadorRequest);
+            console.log("ID do jogador:", id);
+            const jogador = await this.jogadorService.getJogadorById(id);
             if (!jogador) {
                 throw new NotFoundException('Jogador não encontrado');
             }
-            await this.jogadorService.deletar(jogador);
+            const jogadorAtualizado = await this.jogadorService.atualizar(id, jogadorRequest);
             return {
-                mensagem: 'Jogador deletado com sucesso',
+                mensagem: 'Jogador atualizado com sucesso',
                 jogador: {
-                    nome: jogador.nome,
-                    telefoneCelular: jogador.telefoneCelular,
-                    email: jogador.email,
+                    nome: jogadorAtualizado.nome,
+                    telefoneCelular: jogadorAtualizado.telefoneCelular,
+                    email: jogadorAtualizado.email,
                 },
             };
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error; 
             }
-            throw new InternalServerErrorException('Erro ao deletar jogador');
+            throw new InternalServerErrorException('Erro ao atualizar jogador');
         }
     }
 }
